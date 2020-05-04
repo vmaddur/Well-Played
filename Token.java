@@ -3,7 +3,7 @@ import java.util.ArrayList;
 
 public class Token {
 
-    public enum StackDataTypes {
+    public enum DataTypes {
         INT,
         FLOAT
     }
@@ -11,8 +11,9 @@ public class Token {
     private Types type;
     private Value value;
     private String name;
-    private StackDataTypes stackDataType;
+    private DataTypes dataType;
     private int parentScope;
+    private int scope;
     public enum Types {
         ELSE,
         END,
@@ -66,35 +67,59 @@ public class Token {
         return parentScope;
     }
 
+    public int getScope() {
+        return scope;
+    }
+
+    public void setDataType(DataTypes type) {
+        dataType = type;
+    }
+
+    public DataTypes getDataType() {
+        return dataType;
+    }
+
     public Types getType() {
         return type;
     }
 
     //for the simpletons
-    public Token(Types type1) {
+    public Token(Types type1, int scope) {
+        this.scope =scope;
         type = type1;
     }
 
-    public Token(Types type, int pScope) {
+    public Token(Types type, int pScope, int scope) {
+        this.scope = scope;
         this.type = type;
         parentScope = pScope;
     }
 
+    public Token(Types type, String name, int scope, DataTypes dataType) {
+        this.scope = scope;
+        this.type = type;
+        this.name = name;
+        this.dataType = dataType;
+    }
+
     //for the stacks
-    public Token(StackDataTypes st, String name) {
+    public Token(DataTypes st, String name, int scope) {
+        this.scope = scope;
         type = Types.STACK;
-        stackDataType = st;
+        dataType = st;
         this.name = name;
     }
 
     //for the values
-    public Token(Types type1, Value val) {
+    public Token(Types type1, Value val, int scope) {
+        this.scope = scope;
         type = type1;
         value = val;
     }
 
     //for the variables
-    public Token(Types type, String name) {
+    public Token(Types type, String name, int scope) {
+        this.scope = scope;
         this.type = type;
         this.name = name;
     }
@@ -105,8 +130,9 @@ public class Token {
                 "type=" + type +
                 ", value=" + ((value != null) ? value.getValue() : 0) +
                 ", name='" + name + '\'' +
-                ", stackDataType=" + stackDataType +
+                ", dataType=" + dataType +
                 ", parentScope=" + parentScope +
+                ", scope=" + scope +
                 '}';
     }
 }

@@ -33,12 +33,12 @@ public class Tokenizer {
             if (str.matches("\\d*\\.\\d+")) {
                 //we have a float
                 Value v = new Value(Double.parseDouble(str));
-                return new Token(Token.Types.VAL, v);
+                return new Token(Token.Types.VAL, v, scope.peek());
             }
             else if (str.matches("\\d+")) {
                 //we have an int
                 Value v = new Value(Integer.parseInt(str));
-                return new Token(Token.Types.VAL, v);
+                return new Token(Token.Types.VAL, v, scope.peek());
             }
 
         } else if (isAlphaNumeric(""+curr)) {
@@ -51,7 +51,7 @@ public class Tokenizer {
 
             if (str.equals("int")) {
                 index += str.length();
-                return new Token(Token.Types.INT);
+                return new Token(Token.Types.INT, scope.peek());
             }
             else if (str.matches("Stack<\\w+>")) {
                 index += str.length();
@@ -59,55 +59,55 @@ public class Tokenizer {
                 str = str.substring(0, str.indexOf("<"));
                 varNamesToIDs.put(str, out);
                 if (str.matches("Stack<int>"))
-                    return new Token(Token.StackDataTypes.INT, out);
+                    return new Token(Token.DataTypes.INT, out, scope.peek());
                 else
-                    return new Token(Token.StackDataTypes.FLOAT, out);
+                    return new Token(Token.DataTypes.FLOAT, out, scope.peek());
             }
             else if (str.equals("MDrive")) {
                 index += str.length();
-                return new Token(Token.Types.MDRIVE);
+                return new Token(Token.Types.MDRIVE,scope.peek());
             }
             else if (str.equals("LDrive")) {
                 index += str.length();
-                return new Token(Token.Types.LDRIVE);
+                return new Token(Token.Types.LDRIVE,scope.peek());
             }
             else if (str.equals("Steering")) {
                 index += str.length();
-                return new Token(Token.Types.STEER);
+                return new Token(Token.Types.STEER, scope.peek());
             }
             else if (str.equals("Tank")) {
                 index += str.length();
-                return new Token(Token.Types.TANK);
+                return new Token(Token.Types.TANK, scope.peek());
             }
             else if (str.equals("Wait")) {
                 index += str.length();
-                return new Token(Token.Types.WAIT);
+                return new Token(Token.Types.WAIT, scope.peek());
             }
             else if (str.equals("Touch")) {
                 index += str.length();
-                return new Token(Token.Types.TOUCH);
+                return new Token(Token.Types.TOUCH, scope.peek());
             }
             else if (str.equals("Infrared")) {
                 index += str.length();
-                return new Token(Token.Types.INFRA);
+                return new Token(Token.Types.INFRA, scope.peek());
             }
             else if (str.equals("MRotation")) {
                 index += str.length();
-                return new Token(Token.Types.MROT);
+                return new Token(Token.Types.MROT, scope.peek());
             }
             else if (str.equals("float")) {
                 index += str.length();
-                return new Token(Token.Types.FLOAT);
+                return new Token(Token.Types.FLOAT, scope.peek());
             }
             else if (str.equals("else")) {
                 index += str.length();
-                Token t = new Token(Token.Types.ELSE, scope.peek());
                 scope.push(tokenIndex);
+                Token t = new Token(Token.Types.ELSE, scope.peek());
                 return t;
             }
             else if (str.equals("return")) {
                 index += str.length();
-                return new Token(Token.Types.RET);
+                return new Token(Token.Types.RET, scope.peek());
             }
             else if (str.equals("if")) {
                 index += str.length();
@@ -132,23 +132,23 @@ public class Tokenizer {
                     index += str.length();
                     String out = "f"+funIndex++;
                     funNamesToIDs.put(str, out);
-                    return new Token(Token.Types.ID, out);
+                    return new Token(Token.Types.ID, out, scope.peek());
                 }
                 else if (lastToken.getType() == Token.Types.INT || lastToken.getType() == Token.Types.FLOAT) {
                     //we have a var declaration;
                     index += str.length();
                     String out = "v"+(varIndex++)+((scope.peek() == -1) ? "" : "_"+scope.peek());
                     varNamesToIDs.put(str, out);
-                    return new Token(Token.Types.ID, out);
+                    return new Token(Token.Types.ID, out, scope.peek(), (lastToken.getType() == Token.Types.INT) ? Token.DataTypes.INT : Token.DataTypes.FLOAT);
                 }
                 else if (stream.charAt(tick) == '(') {
                     index += str.length();
                     //function call, need to look in function ID's
-                    return new Token(Token.Types.ID, funNamesToIDs.get(str));
+                    return new Token(Token.Types.ID, funNamesToIDs.get(str), scope.peek());
                 }
                 else {
                     index += str.length();
-                    return new Token(Token.Types.ID, varNamesToIDs.get(str));
+                    return new Token(Token.Types.ID, varNamesToIDs.get(str), scope.peek());
                 }
             }
         } else {
@@ -156,72 +156,72 @@ public class Tokenizer {
                 case '=': {
                     if (stream.charAt(index+1) == '=') {
                         index+= 2;
-                        return new Token(Token.Types.EQEQ);
+                        return new Token(Token.Types.EQEQ, scope.peek());
                     } else {
                         index++;
-                        return new Token(Token.Types.EQ);
+                        return new Token(Token.Types.EQ, scope.peek());
                     }
 
                 }
                 case ',': {
                     index++;
-                    return new Token(Token.Types.COMMA);
+                    return new Token(Token.Types.COMMA, scope.peek());
                 }
                 case '{': {
                     index++;
-                    return new Token(Token.Types.LBRACE);
+                    return new Token(Token.Types.LBRACE, scope.peek());
                 }
                 case '}': {
                     index++;
                     scope.pop();
-                    return new Token(Token.Types.RBRACE);
+                    return new Token(Token.Types.RBRACE, scope.peek());
                 }
                 case '(': {
                     index++;
-                    return new Token(Token.Types.LPAREN);
+                    return new Token(Token.Types.LPAREN, scope.peek());
                 }
                 case ')': {
                     index++;
-                    return new Token(Token.Types.RPAREN);
+                    return new Token(Token.Types.RPAREN, scope.peek());
                 }
                 case '*': {
                     index++;
-                    return new Token(Token.Types.MUL);
+                    return new Token(Token.Types.MUL, scope.peek());
                 }
                 case '+': {
                     index++;
-                    return new Token(Token.Types.PLUS);
+                    return new Token(Token.Types.PLUS, scope.peek());
                 }
                 case '/': {
                     index++;
-                    return new Token(Token.Types.DIV);
+                    return new Token(Token.Types.DIV, scope.peek());
                 }
                 case '-': {
                     index++;
-                    return new Token(Token.Types.MINUS);
+                    return new Token(Token.Types.MINUS, scope.peek());
                 }
                 case '<': {
                     if (stream.charAt(index + 1) == '=') {
                         index+=2;
-                        return new Token(Token.Types.LEQ);
+                        return new Token(Token.Types.LEQ, scope.peek());
                     } else {
                         index++;
-                        return new Token(Token.Types.LT);
+                        return new Token(Token.Types.LT, scope.peek());
                     }
                 }
                 case '>': {
                     if (stream.charAt(index + 1) == '=') {
                         index = index + 2;
-                        return new Token(Token.Types.GEQ);
+                        return new Token(Token.Types.GEQ, scope.peek());
                     } else {
                         index = index + 1;
-                        return new Token(Token.Types.GT);
+                        return new Token(Token.Types.GT, scope.peek());
                     }
                 }
                 case '!': {
                     if (stream.charAt(index + 1) == '=') {
                         index = index + 2;
-                        return new Token(Token.Types.NEQ);
+                        return new Token(Token.Types.NEQ, scope.peek());
                     } else {
                         index = index + 1;
                         System.err.println("invalid use of !");
@@ -231,7 +231,7 @@ public class Tokenizer {
                 }
                 case ';': {
                     index = index + 1;
-                    return new Token(Token.Types.SEMI);
+                    return new Token(Token.Types.SEMI, scope.peek());
                 }
             }
         }
@@ -244,20 +244,27 @@ public class Tokenizer {
         if (stream.length() == 0) {
             return null;
         }
-        char curr = stream.charAt(0);
         do {
             while ((""+stream.charAt(index)).matches("\\s")) {
                 index++;
-                curr = stream.charAt(index);
             }
             Token t = getToken(stream, res.size());
-            if (lastToken != null) {
+            if (lastToken != null && !(t.getType() == Token.Types.INT || t.getType() == Token.Types.FLOAT)) {
                 secondToLastToken = lastToken;
             }
+
+            if (lastToken != null && (t.getType() == Token.Types.INT || t.getType() == Token.Types.FLOAT)) {
+                lastToken.setDataType(t.getType() == Token.Types.INT ? Token.DataTypes.INT : Token.DataTypes.FLOAT);
+            }
+
             lastToken = t;
             res.add(t);
         } while (index < stream.length());
-        res.add(new Token(Token.Types.END));
+        res.add(new Token(Token.Types.END, -1));
+        for (int i = res.size() - 1; i >= 0; i--) {
+            if (res.get(i).getType() == Token.Types.INT || res.get(i).getType() == Token.Types.FLOAT)
+                res.remove(i);
+        }
         return res;
     }
 }
