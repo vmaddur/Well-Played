@@ -30,4 +30,7 @@ public class Value {
         else
             return integer;
     }
+    public boolean isFloat() {
+        return flag;
+    }
 }
