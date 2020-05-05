@@ -12,14 +12,16 @@ public class Tokenizer {
         return alphanumeric.matcher(c).find();
     }
 
-    private TreeMap<String, String> varNamesToIDs = new TreeMap<>();
+    private TreeMap<String, Stack<String>> varNamesToIDs = new TreeMap<>();
     private TreeMap<String, String> funNamesToIDs = new TreeMap<>();
     private int varIndex = 0;
     private int funIndex = 0;
     private int index = 0;
 
     private Stack<Integer> scope = new Stack<>();
+    private Stack<ArrayList<String>> varsInScope = new Stack<>();
 
+    boolean cucked = false;
 
     private Token getToken(String stream, int tokenIndex) {
         char curr = stream.charAt(index);
@@ -55,13 +57,10 @@ public class Tokenizer {
             }
             else if (str.matches("Stack<\\w+>")) {
                 index += str.length();
-                String out = "v"+(varIndex++)+((scope.peek() == -1) ? "" : "_"+scope.peek());
-                str = str.substring(0, str.indexOf("<"));
-                varNamesToIDs.put(str, out);
                 if (str.matches("Stack<int>"))
-                    return new Token(Token.DataTypes.INT, out, scope.peek());
+                    return new Token(Token.Types.STACK,scope.peek(), Token.DataTypes.INT);
                 else
-                    return new Token(Token.DataTypes.FLOAT, out, scope.peek());
+                    return new Token(Token.Types.STACK,scope.peek(), Token.DataTypes.FLOAT);
             }
             else if (str.equals("MDrive")) {
                 index += str.length();
@@ -129,16 +128,31 @@ public class Tokenizer {
             }
             else {
                 if (!(scope.peek() == -1) && secondToLastToken.getType() == Token.Types.FUN) {
+                    cucked = true;
                     index += str.length();
-                    String out = "f"+funIndex++;
+                    String out;
+                    if (str.equals("main"))
+                        out = "fmain";
+                    else
+                        out = "f"+funIndex++;
                     funNamesToIDs.put(str, out);
-                    return new Token(Token.Types.ID, out, scope.peek());
+                    Token t = new Token(Token.Types.ID, out, scope.peek());
+                    t.setDataType(lastToken.getType() == Token.Types.INT ? Token.DataTypes.INT : Token.DataTypes.FLOAT);
+                    return t;
                 }
-                else if (lastToken.getType() == Token.Types.INT || lastToken.getType() == Token.Types.FLOAT) {
+                else if (lastToken.getType() == Token.Types.INT || lastToken.getType() == Token.Types.FLOAT || lastToken.getType() == Token.Types.STACK) {
                     //we have a var declaration;
                     index += str.length();
                     String out = "v"+(varIndex++)+((scope.peek() == -1) ? "" : "_"+scope.peek());
-                    varNamesToIDs.put(str, out);
+                    if (!(scope.peek() == -1))
+                        varsInScope.peek().add(str);
+                    if (varNamesToIDs.get(str) == null) {
+                        Stack<String> s = new Stack<>();
+                        s.push(out);
+                        varNamesToIDs.put(str, s);
+                    }
+                    else
+                        varNamesToIDs.get(str).push(out);
                     return new Token(Token.Types.ID, out, scope.peek(), (lastToken.getType() == Token.Types.INT) ? Token.DataTypes.INT : Token.DataTypes.FLOAT);
                 }
                 else if (stream.charAt(tick) == '(') {
@@ -148,7 +162,7 @@ public class Tokenizer {
                 }
                 else {
                     index += str.length();
-                    return new Token(Token.Types.ID, varNamesToIDs.get(str), scope.peek());
+                    return new Token(Token.Types.ID, varNamesToIDs.get(str).peek(), scope.peek());
                 }
             }
         } else {
@@ -169,14 +183,22 @@ public class Tokenizer {
                 }
                 case '{': {
                     index++;
+                    if (!cucked)
+                        varsInScope.push(new ArrayList<>());
+                    else
+                        cucked = false;
                     return new Token(Token.Types.LBRACE, scope.peek());
                 }
                 case '}': {
                     index++;
-                    scope.pop();
-                    return new Token(Token.Types.RBRACE, scope.peek());
+                    for (String s : varsInScope.pop()) {
+                        varNamesToIDs.get(s).pop();
+                    }
+                    return new Token(Token.Types.RBRACE, scope.pop());
                 }
                 case '(': {
+                    if (cucked)
+                        varsInScope.push(new ArrayList<>());
                     index++;
                     return new Token(Token.Types.LPAREN, scope.peek());
                 }
@@ -239,6 +261,8 @@ public class Tokenizer {
     }
 
     public ArrayList<Token> tokenize(String stream) {
+        ArrayList<String> temp = new ArrayList<>();
+        varsInScope.add(temp);
         scope.push(-1);
         ArrayList<Token> res = new ArrayList<>();
         if (stream.length() == 0) {
@@ -249,7 +273,7 @@ public class Tokenizer {
                 index++;
             }
             Token t = getToken(stream, res.size());
-            if (lastToken != null && !(t.getType() == Token.Types.INT || t.getType() == Token.Types.FLOAT)) {
+            if (lastToken != null) {
                 secondToLastToken = lastToken;
             }
 
@@ -261,10 +285,6 @@ public class Tokenizer {
             res.add(t);
         } while (index < stream.length());
         res.add(new Token(Token.Types.END, -1));
-        for (int i = res.size() - 1; i >= 0; i--) {
-            if (res.get(i).getType() == Token.Types.INT || res.get(i).getType() == Token.Types.FLOAT)
-                res.remove(i);
-        }
         return res;
     }
 }

@@ -95,6 +95,13 @@ public class Token {
         parentScope = pScope;
     }
 
+    public Token(Types type, int scope, DataTypes dataType) {
+        this.scope = scope;
+        this.type = type;
+        this.dataType = dataType;
+    }
+
+
     public Token(Types type, String name, int scope, DataTypes dataType) {
         this.scope = scope;
         this.type = type;
