@@ -74,16 +74,19 @@ public class Parser {
                 programLines.add("DATA32 " + varName);
             }
         }
-        // Stores results that will be used for conditional branching
-        programLines.add("DATA32 expressionResult");
         // Temporary storage for data type specific results between operations
         programLines.add("DATA32 raxInt");
         programLines.add("DATAF raxFloat");
-        // Create stacks for rax items and stack pointers
-        programLines.add("HANDLE intStack");
-        programLines.add("DATA32 intStackPointer");
-        programLines.add("HANDLE floatStack");
-        programLines.add("DATA32 floatStackPointer");
+        programLines.add("DATA8 raxUse");
+        programLines.add("DATA32 rdiInt");
+        programLines.add("DATAF rdiFloat");
+        // Flag for comparison results
+        programLines.add("DATA8 compareFlag");
+        // Create stacks for rax items and stack index
+        programLines.add("HANDLE intStack"); // 0 in useStack
+        programLines.add("HANDLE floatStack"); // 1 in useStack
+        programLines.add("HANDLE useStack");
+        programLines.add("DATA32 stackPointer");
         // TODO: Create variables for built-in function arguments
         generateBuiltInFunctions();
         // Handles Main by Putting it First
@@ -100,9 +103,14 @@ public class Parser {
                     programLines.add("vmthread main {");
                     // Initialize stacks for rax items
                     programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, intStack)");
-                    programLines.add("MOVE32_32(0, intStackPointer)");
                     programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, floatStack)");
-                    programLines.add("MOVE32_32(0, floatStackPointer)");
+                    programLines.add("ARRAY(CREATE8, MAX_STACK_SIZE, useStack)");
+                    programLines.add("MOVE32_32(0, stackPointer)");
+                    // Initialize rax stuffs
+                    programLines.add("MOVE32_32(0, raxInt)");
+                    programLines.add("MOVEF_F(0F, raxFloat)");
+                    programLines.add("MOVE8_8(0, raxUse)");
+                    // Does recursive descent parsing on the main
                     processStatement();
                     // Closing Brace
                     programLines.add("}");
@@ -153,7 +161,7 @@ public class Parser {
                 return true;
             }
             // Case of returning in a function
-            case RET : {
+            case RET: {
                 tokenIndex++;
                 processExpression();
                 // Store in right return value
@@ -184,10 +192,6 @@ public class Parser {
                     generateFunctionCall(curr);
                     return true;
                 }
-                // TODO: Stack or Queue Operations
-                else {
-
-                }
                 return true;
             }
             case LBRACE: {
@@ -200,12 +204,12 @@ public class Parser {
                 return true;
             }
             // IF case also handles ELSE clause (if it exists)
-            case IF : {
+            case IF: {
                 tokenIndex++;
                 int ifElse = labelCounter++;
                 // Evaluates the IF condition
                 processExpression();
-                programLines.add("JR_EQ32(expressionResult, 0, LABEL_" + ifElse + ")");
+                programLines.add("JR_EQ32(raxInt, 0, LABEL_" + ifElse + ")");
                 // Move through stuff before the potential ELSE statement
                 processStatement();
                 while(tokenList.get(tokenIndex).getType() == Token.Types.SEMI) tokenIndex++;
@@ -231,7 +235,7 @@ public class Parser {
                 processExpression();
                 // Sets up jump to end of the while loop
                 int whileEnd = labelCounter++;
-                programLines.add("JR_EQ32(expressionResult, 0, LABEL_" + whileEnd + ")");
+                programLines.add("JR_EQ32(raxInt, 0, LABEL_" + whileEnd + ")");
                 processStatement();
                 // Goes back to the start to check conditional
                 programLines.add("JR(LABEL_" + whileStart + ")");
@@ -244,15 +248,7 @@ public class Parser {
 
             }
             */
-            // TODO: Add assembly to LDRIVE, and format other motor operations similarly to the below
-            case LDRIVE: {
-                tokenIndex++;
-                // Store expression results in LDRIVE_port, LDRIVE_power, LDRIVE_rotations, LDRIVE_breakAtEnd
-                // Gotta put these at the top of the code as well
-                // Then run the actual assembly commands using those variables
-                programLines.add("");
-                return true;
-            }
+            // TODO: Stack initialization
             case SEMI: {
                 tokenIndex++;
                 return true;
@@ -282,6 +278,27 @@ public class Parser {
         programLines.add("CALL(" + curr.getName() + ")");
     }
 
+    private void stackMemoryPush() {
+        // Write to stacks
+        programLines.add("ARRAY_WRITE(intStack, stackPointer, raxInt)");
+        programLines.add("ARRAY_WRITE(floatStack, stackPointer, raxFloat)");
+        programLines.add("ARRAY_WRITE(useStack, stackPointer, raxUse)");
+        // Increment stack pointer
+        programLines.add("ADD8(stackPointer, 1, stackPointer)");
+    }
+
+    private void stackMemoryPop() {
+        // Move current rax stuffs into rdi stuffs
+        programLines.add("MOVE32_32(raxInt, rdiInt)");
+        programLines.add("MOVEF_F(raxFloat, rdiFloat)");
+        // Decrement stack pointer
+        programLines.add("SUB8(stackPointer, 1, stackPointer)");
+        // Read from stacks
+        programLines.add("ARRAY_READ(intStack, stackPointer, raxInt)");
+        programLines.add("ARRAY_READ(floatStack, stackPointer, raxFloat)");
+        programLines.add("ARRAY_READ(useStack, stackPointer, raxUse)");
+    }
+
     // TODO: See p4 code
     private void processExpression() {
         fourthStage();
@@ -291,7 +308,87 @@ public class Parser {
     private void fourthStage() {
         thirdStage();
         while (isFourthStageOperator()) {
+            Token.Types t = tokenList.get(tokenIndex).getType();
             tokenIndex++;
+            stackMemoryPush();
+            thirdStage();
+            stackMemoryPop();
+            switch (t) {
+                case EQEQ: {
+                    int ifElse = labelCounter++;
+                    programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                    // Set flag for float compare
+                    programLines.add("CP_EQF(raxFloat, rdiFloat, compareFlag)");
+                    int ifEnd = labelCounter++;
+                    programLines.add("JR(LABEL_" + ifEnd + ")");
+                    programLines.add("LABEL_" + ifElse + ":");
+                    // Set flag for int compare
+                    programLines.add("CP_EQ32(raxInt, rdiInt, compareFlag)");
+                    programLines.add("LABEL_" + ifEnd + ":");
+                }
+                case NEQ: {
+                    int ifElse = labelCounter++;
+                    programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                    // Set flag for float compare
+                    programLines.add("CP_NEQF(raxFloat, rdiFloat, compareFlag)");
+                    int ifEnd = labelCounter++;
+                    programLines.add("JR(LABEL_" + ifEnd + ")");
+                    programLines.add("LABEL_" + ifElse + ":");
+                    // Set flag for int compare
+                    programLines.add("CP_NEQ32(raxInt, rdiInt, compareFlag)");
+                    programLines.add("LABEL_" + ifEnd + ":");
+                }
+                case GEQ: {
+                    int ifElse = labelCounter++;
+                    programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                    // Set flag for float compare
+                    programLines.add("CP_GTEQF(raxFloat, rdiFloat, compareFlag)");
+                    int ifEnd = labelCounter++;
+                    programLines.add("JR(LABEL_" + ifEnd + ")");
+                    programLines.add("LABEL_" + ifElse + ":");
+                    // Set flag for int compare
+                    programLines.add("CP_GTEQ32(raxInt, rdiInt, compareFlag)");
+                    programLines.add("LABEL_" + ifEnd + ":");
+                }
+                case GT: {
+                    int ifElse = labelCounter++;
+                    programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                    // Set flag for float compare
+                    programLines.add("CP_GTF(raxFloat, rdiFloat, compareFlag)");
+                    int ifEnd = labelCounter++;
+                    programLines.add("JR(LABEL_" + ifEnd + ")");
+                    programLines.add("LABEL_" + ifElse + ":");
+                    // Set flag for int compare
+                    programLines.add("CP_GT32(raxInt, rdiInt, compareFlag)");
+                    programLines.add("LABEL_" + ifEnd + ":");
+                }
+                case LEQ: {
+                    int ifElse = labelCounter++;
+                    programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                    // Set flag for float compare
+                    programLines.add("CP_LTEQF(raxFloat, rdiFloat, compareFlag)");
+                    int ifEnd = labelCounter++;
+                    programLines.add("JR(LABEL_" + ifEnd + ")");
+                    programLines.add("LABEL_" + ifElse + ":");
+                    // Set flag for int compare
+                    programLines.add("CP_LTEQ32(raxInt, rdiInt, compareFlag)");
+                    programLines.add("LABEL_" + ifEnd + ":");
+                }
+                case LT: {
+                    int ifElse = labelCounter++;
+                    programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                    // Set flag for float compare
+                    programLines.add("CP_LTF(raxFloat, rdiFloat, compareFlag)");
+                    int ifEnd = labelCounter++;
+                    programLines.add("JR(LABEL_" + ifEnd + ")");
+                    programLines.add("LABEL_" + ifElse + ":");
+                    // Set flag for int compare
+                    programLines.add("CP_LT32(raxInt, rdiInt, compareFlag)");
+                    programLines.add("LABEL_" + ifEnd + ":");
+                }
+            }
+            programLines.add("MOVE8_32(compareFlag, raxInt)");
+            programLines.add("MOVE8_8(0, raxUse)");
         }
     }
 
@@ -305,16 +402,132 @@ public class Parser {
                 t == Token.Types.LT;
     }
 
+    // handles "+", "-"
     private void thirdStage() {
-
+        secondStage();
+        while (isThirdStageOperator()) {
+            Token.Types t = tokenList.get(tokenIndex).getType();
+            tokenIndex++;
+            stackMemoryPush();
+            secondStage();
+            stackMemoryPop();
+            if (t == Token.Types.PLUS) {
+                int ifElse = labelCounter++;
+                programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                // Float type add
+                programLines.add("ADDF(raxFloat, rdiFloat, raxFloat)");
+                int ifEnd = labelCounter++;
+                programLines.add("JR(LABEL_" + ifEnd + ")");
+                programLines.add("LABEL_" + ifElse + ":");
+                // Integer type add
+                programLines.add("ADD32(raxInt, rdiInt, raxInt)");
+                programLines.add("LABEL_" + ifEnd + ":");
+            }
+            else if (t == Token.Types.MINUS) {
+                int ifElse = labelCounter++;
+                programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                // Float type subtract
+                programLines.add("SUBF(raxFloat, rdiFloat, raxFloat)");
+                int ifEnd = labelCounter++;
+                programLines.add("JR(LABEL_" + ifEnd + ")");
+                programLines.add("LABEL_" + ifElse + ":");
+                // Integer type subtract
+                programLines.add("SUB32(raxInt, rdiInt, raxInt)");
+                programLines.add("LABEL_" + ifEnd + ":");
+            }
+        }
     }
 
-    private void secondStage() {
+    private boolean isThirdStageOperator() {
+        Token.Types t = tokenList.get(tokenIndex).getType();
+        return t == Token.Types.PLUS || t == Token.Types.MINUS;
+    }
 
+    // handles "*", "/"
+    private void secondStage() {
+        firstStage();
+        while (isSecondStageOperator()) {
+            Token.Types t = tokenList.get(tokenIndex).getType();
+            tokenIndex++;
+            stackMemoryPush();
+            secondStage();
+            stackMemoryPop();
+            if (t == Token.Types.MUL) {
+                int ifElse = labelCounter++;
+                programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                // Float type add
+                programLines.add("MULF(raxFloat, rdiFloat, raxFloat)");
+                int ifEnd = labelCounter++;
+                programLines.add("JR(LABEL_" + ifEnd + ")");
+                programLines.add("LABEL_" + ifElse + ":");
+                // Integer type add
+                programLines.add("MUL32(raxInt, rdiInt, raxInt)");
+                programLines.add("LABEL_" + ifEnd + ":");
+            }
+            else if (t == Token.Types.DIV) {
+                int ifElse = labelCounter++;
+                programLines.add("JR_EQ32(raxUse, 0, LABEL_" + ifElse + ")");
+                // Float type subtract
+                programLines.add("DIVF(raxFloat, rdiFloat, raxFloat)");
+                int ifEnd = labelCounter++;
+                programLines.add("JR(LABEL_" + ifEnd + ")");
+                programLines.add("LABEL_" + ifElse + ":");
+                // Integer type subtract
+                programLines.add("DIV32(raxInt, rdiInt, raxInt)");
+                programLines.add("LABEL_" + ifEnd + ":");
+            }
+        }
+    }
+
+    private boolean isSecondStageOperator() {
+        Token.Types t = tokenList.get(tokenIndex).getType();
+        return t == Token.Types.MUL || t == Token.Types.DIV;
     }
 
     private void firstStage() {
-
+        Token.Types t = tokenList.get(tokenIndex).getType();
+        if (t == Token.Types.LPAREN) {
+            tokenIndex++;
+            processExpression();
+            tokenIndex++;
+        }
+        else if (t == Token.Types.INT) {
+            int x = (int)tokenList.get(tokenIndex).getValue().getValue();
+            programLines.add("MOVE32_32(" + x + ", raxInt)");
+            programLines.add("MOVE8_8(0, raxUse)");
+            tokenIndex++;
+        }
+        else if (t == Token.Types.FLOAT) {
+            float x = (float)tokenList.get(tokenIndex).getValue().getValue();
+            programLines.add("MOVEF_F(" + x + "F, raxFloat)");
+            programLines.add("MOVE8_8(1, raxUse)");
+            tokenIndex++;
+        }
+        else if (t == Token.Types.ID) {
+            Token curr = tokenList.get(tokenIndex); tokenIndex++;
+            // Break up into cases where we are dealing with a function and are not dealing with a function
+            if (functionParameters.containsKey(curr.getName())) {
+                generateFunctionCall(curr);
+                if (curr.getDataType() == Token.DataTypes.INT) {
+                    programLines.add("MOVE32_32(" + curr.getName() + "_ret, raxInt)");
+                    programLines.add("MOVE8_8(0, raxUse)");
+                }
+                else if (curr.getDataType() == Token.DataTypes.FLOAT) {
+                    programLines.add("MOVEF_F(" +curr.getName() + "_ret, raxFloat)");
+                    programLines.add("MOVE8_8(1, raxUse)");
+                }
+            }
+            else {
+                if (curr.getDataType() == Token.DataTypes.INT) {
+                    programLines.add("MOVE32_32(" + curr.getName() + ", raxInt)");
+                    programLines.add("MOVE8_8(0, raxUse)");
+                }
+                else if (curr.getDataType() == Token.DataTypes.FLOAT) {
+                    programLines.add("MOVEF_F(" +curr.getName() + ", raxFloat)");
+                    programLines.add("MOVE8_8(1, raxUse)");
+                }
+            }
+        }
     }
 
     // TODO: Add function parameters in the form of tokens just like with normal functions the user makes
