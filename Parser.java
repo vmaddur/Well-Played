@@ -13,6 +13,8 @@ public class Parser {
     private int labelCounter;
     // Variables grouped by scope
     private HashMap<String, Token> variables;
+    // Stacks Mapped to Type
+    private HashMap<String, Token.DataTypes> stackTypes;
     // Lists of function parameters
     private HashMap<String, ArrayList<Token>> functionParameters;
     // Program stored line-by-line
@@ -23,9 +25,12 @@ public class Parser {
     public Parser(ArrayList<Token> stuff, String outputFileName) throws IOException {
         // Make the token list we will use for parsing by removing all "int" and "float" tokens
         tokenList = new ArrayList<Token>();
-        for (int i = 0; i < stuff.size(); i++)
-            if (stuff.get(i).getType() != Token.Types.INT && stuff.get(i).getType() != Token.Types.FLOAT)
+        for (int i = 0; i < stuff.size(); i++) {
+            Token.Types t = stuff.get(i).getType();
+            if (t != Token.Types.INT && t != Token.Types.FLOAT) {
                 tokenList.add(stuff.get(i));
+            }
+        }
         tokenIndex = 0;
         labelCounter = 0;
         // Initializes the HashMap organizing variables by their scope
@@ -88,7 +93,7 @@ public class Parser {
         programLines.add("HANDLE useStack");
         programLines.add("DATA32 stackPointer");
         // TODO: Create variables for built-in function arguments
-        generateBuiltInFunctions();
+        generateBuiltInFunctionParameters();
         // Handles Main by Putting it First
         for (int i = 0; i < tokenList.size(); i++){
             if (tokenList.get(i).getType() == Token.Types.FUN) {
@@ -103,7 +108,7 @@ public class Parser {
                     programLines.add("vmthread main {");
                     // Initialize stacks for rax items
                     programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, intStack)");
-                    programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, floatStack)");
+                    programLines.add("ARRAY(CREATEF, MAX_STACK_SIZE, floatStack)");
                     programLines.add("ARRAY(CREATE8, MAX_STACK_SIZE, useStack)");
                     programLines.add("MOVE32_32(0, stackPointer)");
                     // Initialize rax stuffs
@@ -130,6 +135,8 @@ public class Parser {
         }
         // Do the recursive descent parsing for everything else remaining
         repeatProcessing();
+        // TODO: Add our built in functions to the end
+        addBuiltInFunctionAssembly();
         // Print out every line of the program
         for (int i = 0; i < programLines.size(); i++) {
             out.println(programLines.get(i));
@@ -248,7 +255,23 @@ public class Parser {
 
             }
             */
-            // TODO: Stack initialization
+            // Stack initialization
+            case STACK: {
+                Token.DataTypes dt = tokenList.get(tokenIndex).getDataType(); tokenIndex++;
+                String stackName = tokenList.get(tokenIndex).getName(); tokenIndex++;
+                programLines.add("HANDLE " + stackName);
+                programLines.add("DATA32 " + stackName + "Pointer");
+                if (dt == Token.DataTypes.FLOAT) {
+                    programLines.add("ARRAY(CREATEF, MAX_STACK_SIZE, floatStack)");
+                }
+                else if (dt == Token.DataTypes.INT) {
+                    programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, intStack)");
+                }
+                programLines.add("MOVE32_32(0, " + stackName + "Pointer)");
+                // Adds stack to lookup table
+                stackTypes.put(stackName, dt);
+                return true;
+            }
             case SEMI: {
                 tokenIndex++;
                 return true;
@@ -299,7 +322,7 @@ public class Parser {
         programLines.add("ARRAY_READ(useStack, stackPointer, raxUse)");
     }
 
-    // TODO: See p4 code
+    // Similar to what we did in p4
     private void processExpression() {
         fourthStage();
     }
@@ -485,25 +508,25 @@ public class Parser {
     }
 
     private void firstStage() {
-        Token.Types t = tokenList.get(tokenIndex).getType();
-        if (t == Token.Types.LPAREN) {
+        Token t = tokenList.get(tokenIndex);
+        if (t.getType() == Token.Types.LPAREN) {
             tokenIndex++;
             processExpression();
             tokenIndex++;
         }
-        else if (t == Token.Types.INT) {
+        else if (t.getDataType() == Token.DataTypes.INT) {
             int x = (int)tokenList.get(tokenIndex).getValue().getValue();
             programLines.add("MOVE32_32(" + x + ", raxInt)");
             programLines.add("MOVE8_8(0, raxUse)");
             tokenIndex++;
         }
-        else if (t == Token.Types.FLOAT) {
+        else if (t.getDataType() == Token.DataTypes.FLOAT) {
             float x = (float)tokenList.get(tokenIndex).getValue().getValue();
             programLines.add("MOVEF_F(" + x + "F, raxFloat)");
             programLines.add("MOVE8_8(1, raxUse)");
             tokenIndex++;
         }
-        else if (t == Token.Types.ID) {
+        else if (t.getType() == Token.Types.ID) {
             Token curr = tokenList.get(tokenIndex); tokenIndex++;
             // Break up into cases where we are dealing with a function and are not dealing with a function
             if (functionParameters.containsKey(curr.getName())) {
@@ -531,7 +554,14 @@ public class Parser {
     }
 
     // TODO: Add function parameters in the form of tokens just like with normal functions the user makes
-    private void generateBuiltInFunctions() {
+    private void generateBuiltInFunctionParameters() {
+        // EX: LDRIVE
+        // Store expression results in LDRIVE_port, LDRIVE_power, LDRIVE_rotations, LDRIVE_breakAtEnd
+        // Then run the actual assembly commands using those variables
+    }
+
+    // TODO: Append all pre-established assembly codes to the end of our generated code
+    private void addBuiltInFunctionAssembly() {
         // EX: LDRIVE
         // Store expression results in LDRIVE_port, LDRIVE_power, LDRIVE_rotations, LDRIVE_breakAtEnd
         // Then run the actual assembly commands using those variables
