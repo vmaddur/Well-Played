@@ -1,8 +1,8 @@
-import java.util.*;
-
+// Handles int and float types in our language
 public class Value {
     private int integer;
-    private double dec;
+    private float dec;
+    // True = float, False = int
     private boolean flag;
 
     public Value(int n) {
@@ -10,17 +10,21 @@ public class Value {
         flag = false;
     }
 
-    public Value(double d) {
+    public Value(float d) {
         dec = d;
         flag = true;
     }
 
-    //shouldn't need these but just in case
-    public void setValue(double d) {
+    public boolean isFloat() {
+        return flag;
+    }
+
+    // Setter Methods
+    public void setFloatValue(float d) {
         dec = d;
     }
 
-    public void setValue(int n) {
+    public void setIntegerValue(int n) {
         integer = n;
     }
 
@@ -29,8 +33,5 @@ public class Value {
             return dec;
         else
             return integer;
-    }
-    public boolean isFloat() {
-        return flag;
     }
 }
