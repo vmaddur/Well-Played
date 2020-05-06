@@ -35,7 +35,7 @@ public class Tokenizer {
             }
             if (str.matches("\\d*\\.\\d+")) {
                 //we have a float
-                Value v = new Value(Double.parseDouble(str));
+                Value v = new Value(Float.parseFloat(str));
                 return new Token(Token.Types.VAL, v, scope.peek());
             }
             else if (str.matches("\\d+")) {
