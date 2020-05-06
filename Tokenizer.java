@@ -12,9 +12,9 @@ public class Tokenizer {
         return alphanumeric.matcher(c).find();
     }
 
-    private TreeMap<String, Stack<String>> varNamesToIDs = new TreeMap<>();
+    private TreeMap<String, Stack<Token>> varNamesToIDs = new TreeMap<>();
     private TreeMap<String, String> funNamesToIDs = new TreeMap<>();
-    private TreeMap<String, Token> idMotherTokens = new TreeMap<>();
+    private TreeMap<String, Token.DataTypes> funNamesToDT = new TreeMap<>();
     private int varIndex = 0;
     private int funIndex = 13;
     private int index = 0;
@@ -35,7 +35,7 @@ public class Tokenizer {
             }
             if (str.matches("\\d*\\.\\d+")) {
                 //we have a float
-                Value v = new Value(Float.parseFloat(str));
+                Value v = new Value(Double.parseDouble(str));
                 return new Token(Token.Types.VAL, v, scope.peek());
             }
             else if (str.matches("\\d+")) {
@@ -104,9 +104,12 @@ public class Tokenizer {
                         out = "fmain";
                     else
                         out = "f"+funIndex++;
-                    funNamesToIDs.put(str, out);
+
                     Token t = new Token(Token.Types.ID, out, scope.peek());
-                    t.setDataType(lastToken.getType() == Token.Types.INT ? Token.DataTypes.INT : lastToken.getType() == Token.Types.FLOAT ? Token.DataTypes.FLOAT : lastToken.getDataType() == Token.DataTypes.INTSTACK ? Token.DataTypes.INTSTACK : Token.DataTypes.FLOATSTACK);
+                    Token.DataTypes dt = (lastToken.getType() == Token.Types.INT ? Token.DataTypes.INT : lastToken.getType() == Token.Types.FLOAT ? Token.DataTypes.FLOAT : lastToken.getDataType() == Token.DataTypes.INTSTACK ? Token.DataTypes.INTSTACK : Token.DataTypes.FLOATSTACK);
+                    t.setDataType(dt);
+                    funNamesToIDs.put(str, out);
+                    funNamesToDT.put(str, dt);
                     return t;
                 }
                 else if (lastToken.getType() == Token.Types.INT || lastToken.getType() == Token.Types.FLOAT || lastToken.getType() == Token.Types.STACK) {
@@ -115,23 +118,28 @@ public class Tokenizer {
                     String out = "v"+(varIndex++)+((scope.peek() == -1) ? "" : "_"+scope.peek());
                     if (!(scope.peek() == -1))
                         varsInScope.peek().add(str);
+
+                    Token t = new Token(Token.Types.ID, out, scope.peek(),lastToken.getType() == Token.Types.INT ? Token.DataTypes.INT : lastToken.getType() == Token.Types.FLOAT ? Token.DataTypes.FLOAT : lastToken.getDataType() == Token.DataTypes.INTSTACK ? Token.DataTypes.INTSTACK : Token.DataTypes.FLOATSTACK);
                     if (varNamesToIDs.get(str) == null) {
-                        Stack<String> s = new Stack<>();
-                        s.push(out);
+                        Stack<Token> s = new Stack<>();
+                        s.push(t);
                         varNamesToIDs.put(str, s);
                     }
                     else
-                        varNamesToIDs.get(str).push(out);
-                    return new Token(Token.Types.ID, out, scope.peek(),lastToken.getType() == Token.Types.INT ? Token.DataTypes.INT : lastToken.getType() == Token.Types.FLOAT ? Token.DataTypes.FLOAT : lastToken.getDataType() == Token.DataTypes.INTSTACK ? Token.DataTypes.INTSTACK : Token.DataTypes.FLOATSTACK);
+                        varNamesToIDs.get(str).push(t);
+                    return t;
                 }
                 else if (stream.charAt(tick) == '(') {
                     index += str.length();
                     //function call, need to look in function ID's
-                    return new Token(Token.Types.ID, funNamesToIDs.get(str), scope.peek());
+                    Token t =  new Token(Token.Types.ID, funNamesToIDs.get(str), scope.peek());
+                    t.setDataType(funNamesToDT.get(str));
+                    return t;
                 }
                 else {
                     index += str.length();
-                    return new Token(Token.Types.ID, varNamesToIDs.get(str).peek(), scope.peek());
+                    //return new Token(Token.Types.ID, varNamesToIDs.get(str).peek(), scope.peek());
+                    return varNamesToIDs.get(str).peek();
                 }
             }
         } else {
