@@ -5,7 +5,9 @@ public class Token {
 
     public enum DataTypes {
         INT,
-        FLOAT
+        FLOAT,
+        FLOATSTACK,
+        INTSTACK
     }
 
     private Types type;
@@ -43,16 +45,7 @@ public class Token {
         INT,
         FLOAT,
         COMMA,
-        RET,
-        MDRIVE,
-        LDRIVE,
-        STEER,
-        TANK,
-        WAIT,
-        TOUCH,
-        INFRA,
-        MROT
-
+        RET
     }
 
     public Value getValue() {
