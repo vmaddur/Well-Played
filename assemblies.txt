@@ -42,5 +42,6 @@ TANK: //Tank
 NOTE: First need to combine both given motor parameters to find the motor code (given by chart on spec)
 
 OUTPUT_POLARITY(layer,FIRST MOTOR, 0)
+//mv 360 * #rotations -> rotations param
 call (mdrive with appropriate motors code)
 OUTPUT_POLARITY(layer,FIRST MOTOR, 0)
