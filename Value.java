@@ -1,36 +1,42 @@
-import java.util.*;
-
+// Handles int and float types in our language
 public class Value {
     private int integer;
-    private double dec;
-    private boolean flag;
+    private float dec;
+    // True = float, False = int
+    private int flag;
 
     public Value(int n) {
         integer = n;
-        flag = false;
+        flag = 0;
     }
 
-    public Value(double d) {
+    public Value(float d) {
         dec = d;
-        flag = true;
+        flag = 1;
     }
 
-    //shouldn't need these but just in case
-    public void setValue(double d) {
+    public boolean isInt() {
+        return flag == 0;
+    }
+
+    public boolean isFloat() {
+        return flag == 1;
+    }
+
+    // Setter Methods
+    public void setFloatValue(float d) {
         dec = d;
     }
 
-    public void setValue(int n) {
+    public void setIntegerValue(int n) {
         integer = n;
     }
 
     public Number getValue() {
-        if (flag)
-            return dec;
-        else
+       if (flag == 0)
             return integer;
-    }
-    public boolean isFloat() {
-        return flag;
+        if (flag == 1)
+            return dec;
+        return 0;
     }
 }
