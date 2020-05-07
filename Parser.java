@@ -11,12 +11,12 @@ public class Parser {
     private Token funToken;
     // Labels for determining branching jumps
     private int labelCounter;
-    // Variables grouped by scope
-    private HashMap<String, Token> variables;
     // Stacks Mapped to Type
     private HashMap<String, Token.DataTypes> stackTypes;
     // Lists of function parameters
     private HashMap<String, ArrayList<Token>> functionParameters;
+    // Set of variables that are function parameters
+    private HashSet<String> parameterVars;
     // Program stored line-by-line
     private ArrayList<String> programLines;
     private PrintWriter out;
@@ -33,26 +33,24 @@ public class Parser {
         }
         tokenIndex = 0;
         labelCounter = 0;
-        // Initializes the HashMap organizing variables by their scope
-        for (Token t: tokenList) {
-            if (t.getType() != Token.Types.ID) continue;
-            // Puts variable into HashMap
-            String varName = t.getName();
-            if (varName.charAt(0) != 'f') {
-                variables.put(varName, t);
-            }
-        }
         // Store parameters for each function for easy lookup in the future
+        functionParameters = new HashMap<String, ArrayList<Token>>();
+        parameterVars = new HashSet<String>();
         for (int i = 0; i < tokenList.size(); i++) {
             if (tokenList.get(i).getType() != Token.Types.FUN) continue;
             else i++;
             String funName = tokenList.get(i).getName(); i += 2;
             functionParameters.put(funName, new ArrayList<Token>());
-            while (tokenList.get(i).getType() == Token.Types.ID) {
-                functionParameters.get(funName).add(tokenList.get(i));
-                i += 2;
+            while (tokenList.get(i).getType() != Token.Types.RPAREN) {
+                if (tokenList.get(i).getType() == Token.Types.ID) {
+                    functionParameters.get(funName).add(tokenList.get(i));
+                    parameterVars.add(tokenList.get(i).getName());
+                }
+                i++;
             }
         }
+        programLines = new ArrayList<String>();
+        stackTypes = new HashMap<String, Token.DataTypes>();
         out = new PrintWriter(new FileWriter(outputFileName));
     }
 
@@ -61,23 +59,42 @@ public class Parser {
         // Useful defines (may be extended in the future)
         programLines.add("define MAX_STACK_SIZE 1024");
         // Initialize variables
+        // TODO: Fix multiple initialization
+        HashSet<String> alreadyInitialized = new HashSet<String>();
         for (Token t: tokenList) {
-            if (t.getType() != Token.Types.ID) continue;
+            if (t.getType() != Token.Types.ID) {
+                continue;
+            }
             String varName = t.getName();
+            if (alreadyInitialized.contains(varName)) {
+                continue;
+            }
             if (varName.charAt(0) == 'f') {
                 StringBuilder returnVar = new StringBuilder();
-                if (t.getValue().isFloat()) returnVar.append("DATAF ");
-                else returnVar.append("DATA32 ");
+                if (t.getDataType() == Token.DataTypes.FLOAT) {
+                    returnVar.append("DATAF ");
+                }
+                else if (t.getDataType() == Token.DataTypes.INT) {
+                    returnVar.append("DATA32 ");
+                }
                 returnVar.append(varName + "_ret");
-                variables.put(varName + "_ret", t);
                 programLines.add(returnVar.toString());
             }
-            else if (t.getValue().isFloat()) {
-                programLines.add("DATAF " + varName);
+            else if (t.getDataType() == Token.DataTypes.FLOAT) {
+                String line = "DATAF " + varName;
+                if (parameterVars.contains(varName)) {
+                    line +=  "_param";
+                }
+                programLines.add(line);
             }
-            else {
-                programLines.add("DATA32 " + varName);
+            else if (t.getDataType() == Token.DataTypes.INT) {
+                String line = "DATA32 " + varName;
+                if (parameterVars.contains(varName)) {
+                    line +=  "_param";
+                }
+                programLines.add(line);
             }
+            alreadyInitialized.add(varName);
         }
         // Temporary storage for data type specific results between operations
         programLines.add("DATA32 raxInt");
@@ -96,41 +113,39 @@ public class Parser {
         generateBuiltInFunctionParameters();
         // Handles Main by Putting it First
         for (int i = 0; i < tokenList.size(); i++){
-            if (tokenList.get(i).getType() == Token.Types.FUN) {
-                if (tokenList.get(i + 1).getName().equals("fmain")) {
-                    // Initialize tokenIndex to intended position and funToken to the right token
-                    tokenIndex = i; funToken = tokenList.get(i+1);
-                    while (tokenList.get(tokenIndex).getType() != Token.Types.RPAREN) {
-                        tokenIndex++;
-                    }
+            if (tokenList.get(i).getType() == Token.Types.FUN && tokenList.get(i + 1).getName().equals("fmain")) {
+                // Initialize tokenIndex to intended position and funToken to the right token
+                tokenIndex = i; funToken = tokenList.get(i+1);
+                while (tokenList.get(tokenIndex).getType() != Token.Types.RPAREN) {
                     tokenIndex++;
-                    // Main Header
-                    programLines.add("vmthread main {");
-                    // Initialize stacks for rax items
-                    programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, intStack)");
-                    programLines.add("ARRAY(CREATEF, MAX_STACK_SIZE, floatStack)");
-                    programLines.add("ARRAY(CREATE8, MAX_STACK_SIZE, useStack)");
-                    programLines.add("MOVE32_32(0, stackPointer)");
-                    // Initialize rax stuffs
-                    programLines.add("MOVE32_32(0, raxInt)");
-                    programLines.add("MOVEF_F(0F, raxFloat)");
-                    programLines.add("MOVE8_8(0, raxUse)");
-                    // Does recursive descent parsing on the main
-                    processStatement();
-                    // Closing Brace
-                    programLines.add("}");
-                    // Removes all tokens in the main from the list of tokens to be processed
-                    int startOfMain = i, endOfMain = tokenIndex-1;
-                    ArrayList<Token> remaining = new ArrayList<Token>();
-                    for (int j = 0; j < tokenList.size(); j++) {
-                        if (j < startOfMain || j > endOfMain) {
-                            remaining.add(tokenList.get(j));
-                        }
-                    }
-                    // Resets the tokenIndex
-                    tokenList = remaining; tokenIndex = 0;
-                    break;
                 }
+                tokenIndex++;
+                // Main Header
+                programLines.add("vmthread main {");
+                // Initialize stacks for rax items
+                programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, intStack)");
+                programLines.add("ARRAY(CREATEF, MAX_STACK_SIZE, floatStack)");
+                programLines.add("ARRAY(CREATE8, MAX_STACK_SIZE, useStack)");
+                programLines.add("MOVE32_32(0, stackPointer)");
+                // Initialize rax stuffs
+                programLines.add("MOVE32_32(0, raxInt)");
+                programLines.add("MOVEF_F(0F, raxFloat)");
+                programLines.add("MOVE8_8(0, raxUse)");
+                // Does recursive descent parsing on the main
+                processStatement();
+                // Closing Brace
+                programLines.add("}");
+                // Removes all tokens in the main from the list of tokens to be processed
+                int startOfMain = i, endOfMain = tokenIndex-1;
+                ArrayList<Token> remaining = new ArrayList<Token>();
+                for (int j = 0; j < tokenList.size(); j++) {
+                    if (j < startOfMain || j > endOfMain) {
+                        remaining.add(tokenList.get(j));
+                    }
+                }
+                // Resets the tokenIndex
+                tokenList = remaining; tokenIndex = 0;
+                break;
             }
         }
         // Do the recursive descent parsing for everything else remaining
@@ -151,6 +166,7 @@ public class Parser {
 
     // Token-by-token processing
     private boolean processStatement() throws Exception {
+        System.out.println(tokenIndex + " " + tokenList.get(tokenIndex).toString());
         switch (tokenList.get(tokenIndex).getType()) {
             // Case of declaring a function
             case FUN: {
@@ -162,6 +178,18 @@ public class Parser {
                 tokenIndex++;
                 // Function Header
                 programLines.add("subcall " + funToken.getName() + " {");
+                // Specify parameters
+                for (Token arg : functionParameters.get(funToken.getName())) {
+                    if (arg.getDataType() == Token.DataTypes.INT) {
+                        programLines.add("IN_32 " + arg.getName());
+                    }
+                    else if (arg.getDataType() == Token.DataTypes.FLOAT) {
+                        programLines.add("IN_F " + arg.getName());
+                    }
+                    else if (arg.getDataType() == Token.DataTypes.INTSTACK || arg.getDataType() == Token.DataTypes.FLOATSTACK) {
+                        programLines.add("IN_H " + arg.getName());
+                    }
+                }
                 processStatement();
                 // Closing Brace
                 programLines.add("}");
@@ -182,9 +210,11 @@ public class Parser {
             }
             // Dealing with a variable or function call
             case ID: {
+                System.out.println("ID " + tokenIndex);
                 Token curr = tokenList.get(tokenIndex); tokenIndex++;
                 // Setting a variable
                 if (tokenList.get(tokenIndex).getType() == Token.Types.EQ) {
+                    tokenIndex++;
                     processExpression();
                     if (curr.getDataType() == Token.DataTypes.INT) {
                         programLines.add("MOVE32_32(raxInt, " + curr.getName() + ")");
@@ -202,11 +232,14 @@ public class Parser {
                 return true;
             }
             case LBRACE: {
+                System.out.println("LBRACE " + tokenIndex);
                 tokenIndex++;
                 repeatProcessing();
                 if (tokenList.get(tokenIndex).getType() != Token.Types.RBRACE){
+                    System.out.println(tokenList.get(tokenIndex));
                     throw new Exception("Error at Token " + tokenIndex + "! Missing Matching Right Brace!");
                 }
+                System.out.println("RBRACE " + tokenIndex);
                 tokenIndex++;
                 return true;
             }
@@ -260,14 +293,14 @@ public class Parser {
                 Token.DataTypes dt = tokenList.get(tokenIndex).getDataType(); tokenIndex++;
                 String stackName = tokenList.get(tokenIndex).getName(); tokenIndex++;
                 programLines.add("HANDLE " + stackName);
-                programLines.add("DATA32 " + stackName + "Pointer");
-                if (dt == Token.DataTypes.FLOAT) {
-                    programLines.add("ARRAY(CREATEF, MAX_STACK_SIZE, floatStack)");
+                programLines.add("DATA32 " + stackName + "_Pointer");
+                if (dt == Token.DataTypes.FLOATSTACK) {
+                    programLines.add("ARRAY(CREATEF, MAX_STACK_SIZE, " + stackName + ")");
                 }
-                else if (dt == Token.DataTypes.INT) {
-                    programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, intStack)");
+                else if (dt == Token.DataTypes.INTSTACK) {
+                    programLines.add("ARRAY(CREATE32, MAX_STACK_SIZE, " + stackName + ")");
                 }
-                programLines.add("MOVE32_32(0, " + stackName + "Pointer)");
+                programLines.add("MOVE32_32(0, " + stackName + "_Pointer)");
                 // Adds stack to lookup table
                 stackTypes.put(stackName, dt);
                 return true;
@@ -287,18 +320,29 @@ public class Parser {
         tokenIndex++;
         int argumentNumber = 0;
         while (tokenList.get(tokenIndex).getType() != Token.Types.RPAREN) {
+            if (tokenList.get(tokenIndex).getType() == Token.Types.COMMA) {
+                tokenIndex++;
+                continue;
+            }
             processExpression();
             Token arg = functionParameters.get(curr.getName()).get(argumentNumber);
             if (arg.getDataType() == Token.DataTypes.INT) {
-                programLines.add("MOVE32_32(raxInt, " + arg.getName() + ")");
+                programLines.add("MOVE32_32(raxInt, " + arg.getName() + "_param)");
             }
             else if (arg.getDataType() == Token.DataTypes.FLOAT) {
-                programLines.add("MOVEF_F(raxFloat, " + arg.getName() + ")");
+                programLines.add("MOVEF_F(raxFloat, " + arg.getName() + "_param)");
             }
             argumentNumber++;
         }
         tokenIndex++;
-        programLines.add("CALL(" + curr.getName() + ")");
+        StringBuilder call = new StringBuilder("CALL(" + curr.getName());
+        // Create call
+        for (int i = 0; i < functionParameters.get(curr.getName()).size(); i++) {
+            Token arg = functionParameters.get(curr.getName()).get(i);
+            call.append(", " + arg.getName() + "_param");
+        }
+        call.append(")");
+        programLines.add(call.toString());
     }
 
     private void stackMemoryPush() {
@@ -307,7 +351,7 @@ public class Parser {
         programLines.add("ARRAY_WRITE(floatStack, stackPointer, raxFloat)");
         programLines.add("ARRAY_WRITE(useStack, stackPointer, raxUse)");
         // Increment stack pointer
-        programLines.add("ADD8(stackPointer, 1, stackPointer)");
+        programLines.add("ADD32(stackPointer, 1, stackPointer)");
     }
 
     private void stackMemoryPop() {
@@ -315,7 +359,7 @@ public class Parser {
         programLines.add("MOVE32_32(raxInt, rdiInt)");
         programLines.add("MOVEF_F(raxFloat, rdiFloat)");
         // Decrement stack pointer
-        programLines.add("SUB8(stackPointer, 1, stackPointer)");
+        programLines.add("SUB32(stackPointer, 1, stackPointer)");
         // Read from stacks
         programLines.add("ARRAY_READ(intStack, stackPointer, raxInt)");
         programLines.add("ARRAY_READ(floatStack, stackPointer, raxFloat)");
@@ -509,23 +553,14 @@ public class Parser {
 
     private void firstStage() {
         Token t = tokenList.get(tokenIndex);
+        System.out.println("firstStage " + t.toString());
+        // Left parentheses and right parentheses case
         if (t.getType() == Token.Types.LPAREN) {
             tokenIndex++;
             processExpression();
             tokenIndex++;
         }
-        else if (t.getDataType() == Token.DataTypes.INT) {
-            int x = (int)tokenList.get(tokenIndex).getValue().getValue();
-            programLines.add("MOVE32_32(" + x + ", raxInt)");
-            programLines.add("MOVE8_8(0, raxUse)");
-            tokenIndex++;
-        }
-        else if (t.getDataType() == Token.DataTypes.FLOAT) {
-            float x = (float)tokenList.get(tokenIndex).getValue().getValue();
-            programLines.add("MOVEF_F(" + x + "F, raxFloat)");
-            programLines.add("MOVE8_8(1, raxUse)");
-            tokenIndex++;
-        }
+        // Function call or variable
         else if (t.getType() == Token.Types.ID) {
             Token curr = tokenList.get(tokenIndex); tokenIndex++;
             // Break up into cases where we are dealing with a function and are not dealing with a function
@@ -551,6 +586,20 @@ public class Parser {
                 }
             }
         }
+        // Constant int
+        else if (t.getValue().isInt()) {
+            int x = (int)tokenList.get(tokenIndex).getValue().getValue();
+            programLines.add("MOVE32_32(" + x + ", raxInt)");
+            programLines.add("MOVE8_8(0, raxUse)");
+            tokenIndex++;
+        }
+        // Constant float
+        else if (t.getValue().isFloat()) {
+            float x = (float)tokenList.get(tokenIndex).getValue().getValue();
+            programLines.add("MOVEF_F(" + x + "F, raxFloat)");
+            programLines.add("MOVE8_8(1, raxUse)");
+            tokenIndex++;
+        }
     }
 
     // TODO: Add function parameters in the form of tokens just like with normal functions the user makes
@@ -558,6 +607,7 @@ public class Parser {
         // EX: LDRIVE
         // Store expression results in LDRIVE_port, LDRIVE_power, LDRIVE_rotations, LDRIVE_breakAtEnd
         // Then run the actual assembly commands using those variables
+
     }
 
     // TODO: Append all pre-established assembly codes to the end of our generated code
