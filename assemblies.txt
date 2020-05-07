@@ -1,0 +1,39 @@
+For drive functions:
+
+OUTPUT_STEP_POWER(0,motors,power,count up,count run,count down,brake)
+OUTPUT_STEP_SPEED(0,motors,speed,count up,count run,count down,brake)
+OUTPUT_START(0,motors)
+OUTPUT_READY(0,motors)
+OUTPUT_STOP(0,0,1)
+
+For WAIT
+
+TIMER_WAIT(secs,timer)
+TIMER_READY(timer)
+
+
+For Inverting Motors
+
+OUTPUT_POLARITY(layer,motors,polarity) //set polarity to ! of current polarity? might have to keep track of motor polarities in parser
+
+
+For Infrared
+
+INPUT_READ(0,infraredconnection,33,0,percent)
+
+For Touch
+
+INPUT_READ(0,infraredconnection, 16, 0, state)
+
+For Motor Rotation
+
+2 cases: 
+
+if medium motor,
+
+INPUT_READ(0, port, 8, 1,percent)
+
+for large,
+
+INPUT_READ(0, port, 7, 1,percent)
+
