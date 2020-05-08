@@ -31,11 +31,11 @@ For Motor Rotation //MRotation
 
 if medium motor,
 
-INPUT_READ(0, port, 8, 1,percent)
+INPUT_READ(0, port, 8, 1, ret)
 
 for large,
 
-INPUT_READ(0, port, 7, 1,percent)
+INPUT_READ(0, port, 7, 1, ret)
 
 TANK: //Tank
 
