@@ -14,7 +14,7 @@ TIMER_READY(timer)
 
 For Reversing Motors //MReverse
 
-OUTPUT_POLARITY(layer,motors, 0) //set polarity to ! of current polarity? might have to keep track of motor polarities in parser
+OUTPUT_POLARITY(0, motors, 0) //set polarity to ! of current polarity? might have to keep track of motor polarities in parser
 
 
 For Infrared //Infrared
