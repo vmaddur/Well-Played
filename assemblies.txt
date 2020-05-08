@@ -1,5 +1,6 @@
 For drive functions: //MDrive and LDrive
 
+//count up and count down = input * 60, count run = input * 240
 OUTPUT_STEP_POWER(0,motors,power,count up,count run,count down,brake)
 OUTPUT_STEP_SPEED(0,motors,speed,count up,count run,count down,brake)
 OUTPUT_START(0,motors)
