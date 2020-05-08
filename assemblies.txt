@@ -33,7 +33,7 @@ if medium motor,
 
 INPUT_READ(0, port, 8, 1, ret)
 
-for large,
+for large, //ONLY DOING THIS ONE!!!!! NO MEDIUM MOTOR SUPPORT YET!!
 
 INPUT_READ(0, port, 7, 1, ret)
 
