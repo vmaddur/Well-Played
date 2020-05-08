@@ -19,11 +19,11 @@ OUTPUT_POLARITY(layer,motors, 0) //set polarity to ! of current polarity? might 
 
 For Infrared //Infrared
 
-INPUT_READ(0,infraredconnection,33,0,percent)
+INPUT_READ(0, port,33,0,percent)
 
 For Touch //Touch
 
-INPUT_READ(0,infraredconnection, 16, 0, state)
+INPUT_READ(0, port, 16, 0, state)
 
 For Motor Rotation //MRotation
 
